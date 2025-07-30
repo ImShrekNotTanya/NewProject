@@ -3,7 +3,8 @@ import textwrap
 import traceback
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font, Alignment, numbers
+from openpyxl.utils import get_column_letter
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -653,7 +654,7 @@ class AHPFrontend(QMainWindow):
 
             # 1. Проверка первого уровня (типы критериев) - только для 3 уровней
             if self.selected_levels >= 3 and 'criteria_types' in self.backend.matrices:
-                title1 = QLabel("Первый уровень: Согласованность видов критериев")
+                title1 = QLabel(("Первый уровень:" if self.selected_levels == 3 else "") + " Согласованность видов критериев")
                 title1.setStyleSheet("font-weight: bold; font-size: 12pt;")
                 self.consistency_layout.addWidget(title1)
 
@@ -668,7 +669,7 @@ class AHPFrontend(QMainWindow):
 
             # 2. Проверка второго уровня (критерии) - для 2 и 3 уровней
             if self.selected_levels >= 2:
-                title2 = QLabel("Второй уровень: Согласованность критериев")
+                title2 = QLabel(("Второй уровень:" if self.selected_levels == 3 else "") + " Согласованность критериев")
                 title2.setStyleSheet("font-weight: bold; font-size: 12pt; margin-top: 20px;")
                 self.consistency_layout.addWidget(title2)
 
@@ -1236,18 +1237,14 @@ class AHPFrontend(QMainWindow):
             QMessageBox.critical(self, "Ошибка", f"Ошибка при экспорте результатов: {str(e)}")
 
     def _export_to_excel(self, file_path):
-        """Экспорт результатов в Excel с исправлением ошибки объединенных ячеек"""
+        """Экспорт результатов в Excel с правильным форматированием чисел"""
         try:
-            from openpyxl import Workbook
-            from openpyxl.styles import Font, Alignment
-            from openpyxl.utils import get_column_letter
-
             wb = Workbook()
             ws = wb.active
             ws.title = "Результаты анализа"
 
             # Заголовок (без объединения ячеек)
-            ws.append(["Результаты анализа методом МАИ", "", "", ""])
+            ws.append(["Результаты анализа МАИ", "", "", ""])
             ws['A1'].font = Font(bold=True, size=14)
             ws['A1'].alignment = Alignment(horizontal='center')
 
@@ -1256,11 +1253,23 @@ class AHPFrontend(QMainWindow):
                 ws.append(["Приоритеты видов критериев (Первый уровень)", "", "", ""])
                 ws.append(["№", "Вид критериев", "Значение приоритета", "Процент"])
 
+                # Выравнивание заголовков по центру
+                for col in range(1, 5):
+                    ws.cell(row=ws.max_row, column=col).alignment = Alignment(horizontal='center')
+
                 for i, (type_name, value) in enumerate(zip(
                         self.backend.criteria_types.keys(),
                         self.result_data['priorities']['type_priority']
                 ), 1):
                     ws.append([i, type_name, value, value * 100])
+                    # Форматирование ячеек
+                    ws.cell(row=ws.max_row, column=1).alignment = Alignment(horizontal='left')  # № по левому краю
+                    ws.cell(row=ws.max_row, column=2).alignment = Alignment(
+                        horizontal='left')  # Название по левому краю
+                    ws.cell(row=ws.max_row, column=3).number_format = '0.0000'
+                    ws.cell(row=ws.max_row, column=3).alignment = Alignment(horizontal='right')  # Числа по правому краю
+                    ws.cell(row=ws.max_row, column=4).number_format = '0.00'
+                    ws.cell(row=ws.max_row, column=4).alignment = Alignment(horizontal='right')  # Числа по правому краю
 
             # Приоритеты критериев (для 2 и 3 уровней)
             if self.selected_levels >= 2 and 'criteria_priority' in self.result_data['priorities']:
@@ -1269,28 +1278,50 @@ class AHPFrontend(QMainWindow):
                     ["Приоритеты критериев" + (" (Второй уровень)" if self.selected_levels >= 3 else ""), "", "", ""])
                 ws.append(["№", "Критерий", "Значение приоритета", "Процент"])
 
+                # Выравнивание заголовков по центру
+                for col in range(1, 5):
+                    ws.cell(row=ws.max_row, column=col).alignment = Alignment(horizontal='center')
+
                 for i, (criterion, value) in enumerate(zip(
                         self.backend.criteria,
                         self.result_data['priorities']['criteria_priority']
                 ), 1):
                     ws.append([i, criterion, value, value * 100])
+                    ws.cell(row=ws.max_row, column=1).alignment = Alignment(horizontal='left')  # № по левому краю
+                    ws.cell(row=ws.max_row, column=2).alignment = Alignment(
+                        horizontal='left')  # Название по левому краю
+                    ws.cell(row=ws.max_row, column=3).number_format = '0.0000'
+                    ws.cell(row=ws.max_row, column=3).alignment = Alignment(horizontal='right')  # Числа по правому краю
+                    ws.cell(row=ws.max_row, column=4).number_format = '0.00'
+                    ws.cell(row=ws.max_row, column=4).alignment = Alignment(horizontal='right')  # Числа по правому краю
 
             # Приоритеты альтернатив
             if 'alternatives_priority' in self.result_data['priorities']:
                 ws.append([])
                 ws.append(["Итоговые приоритеты альтернатив", "", "", ""])
-                ws.append(["№", "Альтернатива", "Значение приоритета", "Процент"])
+                ws.append(["№", "Альтернатива", "Значение приоритета", "Процент (%)"])
+
+                # Выравнивание заголовков по центру
+                for col in range(1, 5):
+                    ws.cell(row=ws.max_row, column=col).alignment = Alignment(horizontal='center')
 
                 for i, (alt, value) in enumerate(zip(
                         self.backend.alternatives,
                         self.result_data['priorities']['alternatives_priority']
                 ), 1):
                     ws.append([i, alt, value, value * 100])
+                    ws.cell(row=ws.max_row, column=1).alignment = Alignment(horizontal='left')  # № по левому краю
+                    ws.cell(row=ws.max_row, column=2).alignment = Alignment(
+                        horizontal='left')  # Название по левому краю
+                    ws.cell(row=ws.max_row, column=3).number_format = '0.0000'
+                    ws.cell(row=ws.max_row, column=3).alignment = Alignment(horizontal='right')  # Числа по правому краю
+                    ws.cell(row=ws.max_row, column=4).number_format = '0.00'
+                    ws.cell(row=ws.max_row, column=4).alignment = Alignment(horizontal='right')  # Числа по правому краю
 
-            # Форматирование столбцов (без работы с объединенными ячейками)
+            # Форматирование столбцов
             for col in ws.columns:
                 max_length = 0
-                column = col[0].column_letter  # Получаем букву столбца
+                column = col[0].column_letter
                 for cell in col:
                     try:
                         if len(str(cell.value)) > max_length:
@@ -1299,11 +1330,6 @@ class AHPFrontend(QMainWindow):
                         pass
                 adjusted_width = (max_length + 2) * 1.2
                 ws.column_dimensions[column].width = adjusted_width
-
-            # Центрирование заголовков
-            for row in ws.iter_rows(min_row=1, max_row=1):
-                for cell in row:
-                    cell.alignment = Alignment(horizontal='center')
 
             wb.save(file_path)
 
@@ -1316,7 +1342,7 @@ class AHPFrontend(QMainWindow):
             doc = Document()
 
             # Заголовок
-            title = doc.add_paragraph("Результаты анализа методом МАИ")
+            title = doc.add_paragraph("Результаты анализа МАИ")
             title.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title.runs[0].font.size = Pt(14)
             title.runs[0].bold = True
@@ -1332,7 +1358,7 @@ class AHPFrontend(QMainWindow):
                 hdr_cells[0].text = '№'
                 hdr_cells[1].text = 'Вид критериев'
                 hdr_cells[2].text = 'Значение приоритета'
-                hdr_cells[3].text = 'Процент'
+                hdr_cells[3].text = 'Процент (%)'
 
                 for i, (type_name, value) in enumerate(zip(
                         self.backend.criteria_types.keys(),
@@ -1341,8 +1367,8 @@ class AHPFrontend(QMainWindow):
                     row_cells = table.add_row().cells
                     row_cells[0].text = str(i)
                     row_cells[1].text = type_name
-                    row_cells[2].text = f"{value:.6f}"
-                    row_cells[3].text = f"{value * 100:.2f}%"
+                    row_cells[2].text = f"{value:.4f}"
+                    row_cells[3].text = f"{value * 100:.2f}"
 
                 doc.add_paragraph()
 
@@ -1357,7 +1383,7 @@ class AHPFrontend(QMainWindow):
                 hdr_cells[0].text = '№'
                 hdr_cells[1].text = 'Критерий'
                 hdr_cells[2].text = 'Значение приоритета'
-                hdr_cells[3].text = 'Процент'
+                hdr_cells[3].text = 'Процент (%)'
 
                 for i, (criterion, value) in enumerate(zip(
                         self.backend.criteria,
@@ -1366,8 +1392,8 @@ class AHPFrontend(QMainWindow):
                     row_cells = table.add_row().cells
                     row_cells[0].text = str(i)
                     row_cells[1].text = criterion
-                    row_cells[2].text = f"{value:.6f}"
-                    row_cells[3].text = f"{value * 100:.2f}%"
+                    row_cells[2].text = f"{value:.4f}"
+                    row_cells[3].text = f"{value * 100:.2f}"
 
                 doc.add_paragraph()
 
@@ -1381,7 +1407,7 @@ class AHPFrontend(QMainWindow):
                 hdr_cells[0].text = '№'
                 hdr_cells[1].text = 'Альтернатива'
                 hdr_cells[2].text = 'Значение приоритета'
-                hdr_cells[3].text = 'Процент'
+                hdr_cells[3].text = 'Процент (%)'
 
                 for i, (alt, value) in enumerate(zip(
                         self.backend.alternatives,
@@ -1390,8 +1416,8 @@ class AHPFrontend(QMainWindow):
                     row_cells = table.add_row().cells
                     row_cells[0].text = str(i)
                     row_cells[1].text = alt
-                    row_cells[2].text = f"{value:.6f}"
-                    row_cells[3].text = f"{value * 100:.2f}%"
+                    row_cells[2].text = f"{value:.4f}"
+                    row_cells[3].text = f"{value * 100:.2f}"
 
             doc.save(file_path)
 
@@ -1554,7 +1580,7 @@ class AHPFrontend(QMainWindow):
                 item_label.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
                 # Значение
-                item_value = QTableWidgetItem(f"{value:.6f}")
+                item_value = QTableWidgetItem(f"{value:.4f}")
                 item_value.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
                 # Процент
@@ -1600,7 +1626,7 @@ class AHPFrontend(QMainWindow):
             table = QTableWidget()
             table.setColumnCount(4)
             table.setHorizontalHeaderLabels(
-                ["№", "Элемент", "Значение приоритета", "Процент" if show_percent else "Доля"])
+                ["№", "Элемент", "Значение приоритета", "Процент"])
             table.verticalHeader().setVisible(False)
             table.setEditTriggers(QTableWidget.NoEditTriggers)
             table.setSelectionMode(QTableWidget.SingleSelection)
@@ -1622,7 +1648,7 @@ class AHPFrontend(QMainWindow):
                 item_label.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
                 # Значение приоритета
-                item_value = QTableWidgetItem(f"{value:.6f}")
+                item_value = QTableWidgetItem(f"{value:.4f}")
                 item_value.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
                 # Процентное значение
@@ -2187,7 +2213,7 @@ class AHPFrontend(QMainWindow):
                     ax = fig.add_subplot(111)
 
                     bars = ax.bar(criteria, values, color='#55A868', alpha=0.8)
-                    title = "ПРИОРИТЕТЫ КРИТЕРИЕВ" + (" (Второй уровень)" if self.selected_levels >= 3 else "")
+                    title = "ПРИОРИТЕТЫ КРИТЕРИЕВ"
                     ax.set_title(title, fontsize=16, pad=20, fontweight='bold')
                     ax.set_ylabel("Значение приоритета", fontsize=14)
                     ax.grid(axis='y', linestyle='--', alpha=0.5)
@@ -2245,32 +2271,33 @@ class AHPFrontend(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка создания графиков: {str(e)}")
 
-
     def _display_chart_results(self, layout):
-        """Отображение результатов в виде столбчатых диаграмм с учетом уровней иерархии"""
+        """Отображение результатов в виде столбчатых диаграмм (одна диаграмма на весь экран)"""
         try:
             self._clear_layout(layout)
 
             container = QWidget()
             container_layout = QVBoxLayout(container)
-            container_layout.setSpacing(30)
-            container_layout.setContentsMargins(20, 20, 20, 20)
+            container_layout.setContentsMargins(10, 10, 10, 10)
 
             # Возвращаем оригинальный стиль
             plt.style.use('default')
 
-            def create_bar_chart(labels, values, title, color):
-                """Создает одну столбчатую диаграмму"""
-                fig = plt.figure(figsize=(12, 6))
+            # Создаем вкладки для переключения между диаграммами
+            tab_widget = QTabWidget()
+
+            def create_bar_chart_tab(labels, values, title, color, tab_name):
+                """Создает одну столбчатую диаграмму во вкладке"""
+                fig = plt.figure(figsize=(10, 6))
                 ax = fig.add_subplot(111)
 
                 if self.display_percent:
                     values = [v * 100 for v in values]
                     ylabel = "Приоритет, %"
-                    fmt = lambda v: f"{v:.1f}%"
+                    fmt = lambda v: f"{v:.2f}%"
                 else:
                     ylabel = "Значение приоритета"
-                    fmt = lambda v: f"{v:.3f}"
+                    fmt = lambda v: f"{v:.4f}"
 
                 bars = ax.bar(labels, values, color=color, alpha=0.8)
                 ax.set_title(title, fontsize=16, pad=20, fontweight='bold')
@@ -2288,18 +2315,19 @@ class AHPFrontend(QMainWindow):
                             fmt(height),
                             ha='center', va='bottom', fontsize=12)
 
+                # Оптимизация расположения элементов
+                fig.tight_layout()
+
                 canvas = FigureCanvas(fig)
-                canvas.setMinimumHeight(500)
-                container_layout.addWidget(canvas)
+                tab_widget.addTab(canvas, tab_name)
 
             # Для 3 уровня - график типов критериев (первый уровень)
             if self.selected_levels >= 3 and 'type_priority' in self.result_data['priorities']:
                 types = list(self.backend.criteria_types.keys())
                 values = self.result_data['priorities']['type_priority']
                 if len(types) == len(values):
-                    create_bar_chart(types, values,
-                                     "ПРИОРИТЕТЫ ВИДОВ КРИТЕРИЕВ (Первый уровень)",
-                                     '#4C72B0')
+                    title = "ПРИОРИТЕТЫ ВИДОВ КРИТЕРИЕВ" + (" (Первый уровень)" if self.selected_levels >= 3 else "")
+                    create_bar_chart_tab(types, values, title, '#4C72B0', "Типы критериев")
 
             # Для 2 и 3 уровней - график критериев
             if self.selected_levels >= 2 and 'criteria_priority' in self.result_data['priorities']:
@@ -2307,21 +2335,17 @@ class AHPFrontend(QMainWindow):
                 values = self.result_data['priorities']['criteria_priority']
                 if len(criteria) == len(values):
                     title = "ПРИОРИТЕТЫ КРИТЕРИЕВ" + (" (Второй уровень)" if self.selected_levels >= 3 else "")
-                    create_bar_chart(criteria, values, title, '#55A868')
+                    create_bar_chart_tab(criteria, values, title, '#55A868', "Критерии")
 
             # Для всех уровней - график альтернатив
             if 'alternatives_priority' in self.result_data['priorities']:
                 alts = self.backend.alternatives
                 values = self.result_data['priorities']['alternatives_priority']
                 if len(alts) == len(values):
-                    create_bar_chart(alts, values,
-                                     "ПРИОРИТЕТЫ АЛЬТЕРНАТИВ",
-                                     '#C44E52')
+                    create_bar_chart_tab(alts, values, "ПРИОРИТЕТЫ АЛЬТЕРНАТИВ", '#C44E52', "Альтернативы")
 
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setWidget(container)
-            layout.addWidget(scroll)
+            container_layout.addWidget(tab_widget)
+            layout.addWidget(container)
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка создания графиков: {str(e)}")
@@ -2443,165 +2467,146 @@ class AHPFrontend(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка создания таблицы: {str(e)}")
 
-
     def _display_diagram_results(self, layout):
-        """Отображение результатов в виде круговых диаграмм с учетом уровней иерархии"""
+        """Отображение результатов в виде круговых диаграмм с адаптивной легендой"""
         try:
             self._clear_layout(layout)
 
             container = QWidget()
             container_layout = QVBoxLayout(container)
-            container_layout.setSpacing(30)
-            container_layout.setContentsMargins(20, 20, 20, 20)
+            container_layout.setContentsMargins(5, 5, 5, 5)  # Уменьшаем отступы контейнера
 
-            colors = ['#4C72B0', '#55A868', '#C44E52', '#8172B2', '#CCB974', '#64B5CD']
-            textprops = {'fontsize': 14, 'fontweight': 'bold', 'color': '#333333'}
+            # Расширенная цветовая палитра
+            colors = ['#4C72B0', '#55A868', '#C44E52', '#8172B2', '#CCB974', '#64B5CD',
+                      '#FF7F0E', '#FFBB78', '#2CA02C', '#98DF8A', '#D62728', '#FF9896',
+                      '#9467BD', '#C5B0D5', '#8C564B', '#C49C94', '#E377C2', '#F7B6D2',
+                      '#7F7F7F', '#C7C7C7', '#BCBD22', '#DBDB8D', '#17BECF', '#9EDAE5']
+
+            textprops = {'fontsize': 10, 'fontweight': 'bold', 'color': '#333333'}  # Уменьшаем шрифт
             explode = 0.05
 
             def autopct_format(values):
                 if self.display_percent:
-                    return lambda p: f'{p:.1f}%'
+                    return lambda p: f'{p:.1f}%'  # Уменьшаем точность для компактности
                 else:
                     total = sum(values)
-                    return lambda p: f'{p * total / 100:.3f}\n({p:.1f}%)'
+                    return lambda p: f'{p * total / 100:.3f}'
 
-            # Для всех уровней - график альтернатив
-            if 'alternatives_priority' in self.result_data['priorities']:
-                alts = self.backend.alternatives
-                values = self.result_data['priorities']['alternatives_priority']
-                if len(alts) == len(values):
-                    fig = plt.figure(figsize=(12, 8), facecolor='#f8f8f8')
-                    ax = fig.add_subplot(111)
+            # Создаем вкладки для переключения между диаграммами
+            tab_widget = QTabWidget()
 
-                    wedges, texts, autotexts = ax.pie(
-                        values,
-                        labels=alts,
-                        autopct=autopct_format(values),
-                        startangle=90,
-                        colors=colors,
-                        explode=[explode] * len(alts),
-                        shadow={'ox': -0.02, 'oy': 0.02, 'shade': 0.3},
-                        textprops=textprops,
-                        wedgeprops={'linewidth': 2, 'edgecolor': 'white'},
-                        pctdistance=0.75
-                    )
+            def create_pie_chart(data, labels, title, legend_title):
+                """Создает круговую диаграмму с адаптивной легендой"""
+                # Адаптивный размер фигуры в зависимости от количества элементов
+                n_items = len(labels)
+                fig_height = 6 + min(n_items // 10, 4)  # Увеличиваем высоту для большого количества элементов
+                fig = plt.figure(figsize=(12, fig_height), facecolor='#f8f8f8', dpi=100)
+                ax = fig.add_subplot(111)
 
-                    ax.set_title("ПРИОРИТЕТЫ АЛЬТЕРНАТИВ",
-                                 pad=25, fontsize=16, fontweight='bold', color='#2a2a2a')
+                wedges, texts, autotexts = ax.pie(
+                    data,
+                    labels=labels if n_items < 15 else None,  # Убираем подписи при большом количестве элементов
+                    autopct=autopct_format(data) if n_items < 20 else None,  # Убираем проценты при большом количестве
+                    startangle=90,
+                    colors=colors,
+                    explode=[explode] * len(data),
+                    shadow={'ox': -0.02, 'oy': 0.02, 'shade': 0.3},
+                    textprops=textprops,
+                    wedgeprops={'linewidth': 1.2, 'edgecolor': 'white'},
+                    pctdistance=0.8
+                )
 
-                    legend = ax.legend(
-                        wedges,
-                        [f"{a}: {v:.3f}" for a, v in zip(alts, values)],
-                        loc='center left',
-                        bbox_to_anchor=(1.25, 0.5),
-                        fontsize=12,
-                        title="Альтернативы",
-                        title_fontsize=14,
-                        labelspacing=1.5
-                    )
-                    legend.get_frame().set_facecolor('#f0f0f0')
+                ax.set_title(title, pad=15, fontsize=14, fontweight='bold', color='#2a2a2a')
 
-                    for autotext in autotexts:
-                        autotext.set_fontsize(12)
-                        autotext.set_fontweight('bold')
+                # Форматируем элементы легенды
+                legend_elements = []
+                for label, value in zip(labels, data):
+                    abs_value = f"{value:.4f}".ljust(6, '0') if len(f"{value:.4f}") < 6 else f"{value:.4f}"
+                    percent = f"{value * 100:.2f}%".rjust(6, ' ')
+                    legend_elements.append(f"{label}: {abs_value} ({percent})")
 
-                    canvas = FigureCanvas(fig)
-                    canvas.setMinimumHeight(600)
-                    container_layout.addWidget(canvas, alignment=Qt.AlignTop)
+                # Адаптивное количество колонок
+                n_cols = 3 if n_items < 15 else 4 if n_items < 25 else 5
 
-            # Для 2 и 3 уровней - график критериев
-            if self.selected_levels >= 2 and 'criteria_priority' in self.result_data['priorities']:
-                criteria = self.backend.criteria
-                values = self.result_data['priorities']['criteria_priority']
-                if len(criteria) == len(values):
-                    fig = plt.figure(figsize=(12, 8), facecolor='#f8f8f8')
-                    ax = fig.add_subplot(111)
+                # Создаем легенду с увеличенным отступом
+                legend = ax.legend(
+                    wedges,
+                    legend_elements,
+                    loc='upper center',
+                    bbox_to_anchor=(0.5, -0.1),  # Поднимаем легенду (было -0.15)
+                    ncol=n_cols,
+                    fontsize=9,
+                    title=legend_title,
+                    title_fontsize=11,
+                    frameon=True,
+                    fancybox=True,
+                    shadow=True,
+                    borderpad=1,
+                    labelspacing=0.7,
+                    handlelength=1.2,
+                    handleheight=1.2
+                )
 
-                    wedges, texts, autotexts = ax.pie(
-                        values,
-                        labels=criteria,
-                        autopct=autopct_format(values),
-                        startangle=90,
-                        colors=colors,
-                        explode=[explode] * len(criteria),
-                        shadow={'ox': -0.02, 'oy': 0.02, 'shade': 0.3},
-                        textprops=textprops,
-                        wedgeprops={'linewidth': 2, 'edgecolor': 'white'},
-                        pctdistance=0.75
-                    )
+                # Стилизация легенды
+                legend.get_frame().set_facecolor('#f8f8f8')
+                legend.get_frame().set_edgecolor('#aaaaaa')
+                legend.get_frame().set_linewidth(0.8)
+                legend.get_frame().set_alpha(0.95)
+                legend.get_title().set_color('#333333')
+                legend.get_title().set_fontweight('bold')
 
-                    title = "ПРИОРИТЕТЫ КРИТЕРИЕВ" + (" (Второй уровень)" if self.selected_levels >= 3 else "")
-                    ax.set_title(title, pad=25, fontsize=16, fontweight='bold', color='#2a2a2a')
+                for autotext in autotexts:
+                    autotext.set_fontsize(9)
+                    autotext.set_fontweight('bold')
 
-                    legend = ax.legend(
-                        wedges,
-                        [f"{c}: {v:.3f}" for c, v in zip(criteria, values)],
-                        loc='center left',
-                        bbox_to_anchor=(1.25, 0.5),
-                        fontsize=12,
-                        title="Критерии",
-                        title_fontsize=14,
-                        labelspacing=1.5
-                    )
-                    legend.get_frame().set_facecolor('#f0f0f0')
+                # Адаптивные отступы
+                bottom_margin = 0.15 + 0.02 * n_items  # Динамический отступ снизу
+                plt.subplots_adjust(bottom=bottom_margin, top=0.85)
 
-                    for autotext in autotexts:
-                        autotext.set_fontsize(12)
-                        autotext.set_fontweight('bold')
+                return fig
 
-                    canvas = FigureCanvas(fig)
-                    canvas.setMinimumHeight(600)
-                    container_layout.addWidget(canvas, alignment=Qt.AlignTop)
-
-            # Только для 3 уровня - график типов критериев
+            # 1. Типы критериев (Первый уровень)
             if self.selected_levels >= 3 and 'type_priority' in self.result_data['priorities']:
                 types = list(self.backend.criteria_types.keys())
                 values = self.result_data['priorities']['type_priority']
                 if len(types) == len(values):
-                    fig = plt.figure(figsize=(12, 8), facecolor='#f8f8f8')
-                    ax = fig.add_subplot(111)
-
-                    wedges, texts, autotexts = ax.pie(
-                        values,
-                        labels=types,
-                        autopct=autopct_format(values),
-                        startangle=90,
-                        colors=colors,
-                        explode=[explode] * len(types),
-                        shadow={'ox': -0.02, 'oy': 0.02, 'shade': 0.3},
-                        textprops=textprops,
-                        wedgeprops={'linewidth': 2, 'edgecolor': 'white'},
-                        pctdistance=0.75
+                    fig = create_pie_chart(
+                        values, types,
+                        "ПРИОРИТЕТЫ ВИДОВ КРИТЕРИЕВ (Первый уровень)",
+                        "Типы критериев (абсолютное значение / процент)"
                     )
-
-                    ax.set_title("ПРИОРИТЕТЫ ВИДОВ КРИТЕРИЕВ (Первый уровень)",
-                                 pad=25, fontsize=16, fontweight='bold', color='#2a2a2a')
-
-                    legend = ax.legend(
-                        wedges,
-                        [f"{t}: {v:.3f}" for t, v in zip(types, values)],
-                        loc='center left',
-                        bbox_to_anchor=(1.25, 0.5),
-                        fontsize=12,
-                        title="Типы критериев",
-                        title_fontsize=14,
-                        labelspacing=1.5
-                    )
-                    legend.get_frame().set_facecolor('#f0f0f0')
-                    legend.get_frame().set_edgecolor('none')
-
-                    for autotext in autotexts:
-                        autotext.set_fontsize(12)
-                        autotext.set_fontweight('bold')
-
                     canvas = FigureCanvas(fig)
-                    canvas.setMinimumHeight(600)
-                    container_layout.addWidget(canvas, alignment=Qt.AlignTop)
+                    tab_widget.addTab(canvas, "Виды критериев")
 
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setWidget(container)
-            layout.addWidget(scroll)
+            # 2. Критерии (Второй уровень)
+            if self.selected_levels >= 2 and 'criteria_priority' in self.result_data['priorities']:
+                criteria = self.backend.criteria
+                values = self.result_data['priorities']['criteria_priority']
+                if len(criteria) == len(values):
+                    title = "ПРИОРИТЕТЫ КРИТЕРИЕВ" + (" (Второй уровень)" if self.selected_levels >= 3 else "")
+                    fig = create_pie_chart(
+                        values, criteria,
+                        title,
+                        "Критерии (абсолютное значение / процент)"
+                    )
+                    canvas = FigureCanvas(fig)
+                    tab_widget.addTab(canvas, "Критерии")
+
+            # 3. Альтернативы
+            if 'alternatives_priority' in self.result_data['priorities']:
+                alts = self.backend.alternatives
+                values = self.result_data['priorities']['alternatives_priority']
+                if len(alts) == len(values):
+                    fig = create_pie_chart(
+                        values, alts,
+                        "ПРИОРИТЕТЫ АЛЬТЕРНАТИВ",
+                        "Альтернативы (абсолютное значение / процент)"
+                    )
+                    canvas = FigureCanvas(fig)
+                    tab_widget.addTab(canvas, "Альтернативы")
+
+            container_layout.addWidget(tab_widget)
+            layout.addWidget(container)
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка создания диаграмм: {str(e)}")
@@ -2675,6 +2680,10 @@ class AHPFrontend(QMainWindow):
                 CB, w = self.backend.calculate_priority_vector(values_array)
                 w_normalized = w / np.sum(w) if np.sum(w) > 0 else w
 
+            # Округление до 4 знаков после запятой
+            CB = np.round(CB, 4)
+            w_normalized = np.round(w_normalized, 4)
+
             # Заполнение таблицы данными
             table.setRowCount(len(labels))
             max_w = np.max(w_normalized) if len(w_normalized) > 0 else 0
@@ -2684,8 +2693,8 @@ class AHPFrontend(QMainWindow):
                 items = [
                     QTableWidgetItem(str(row + 1)),  # №
                     QTableWidgetItem(str(labels[row])),  # Элемент
-                    QTableWidgetItem(f"{CB[row]:.6f}"),  # Главный вектор ΓB
-                    QTableWidgetItem(f"{w_normalized[row]:.6f}")  # Вектор приоритетов
+                    QTableWidgetItem(f"{CB[row]:.4f}"),  # Главный вектор ΓB (4 знака)
+                    QTableWidgetItem(f"{w_normalized[row]:.4f}")  # Вектор приоритетов (4 знака)
                 ]
 
                 # Настройка стилей
@@ -2718,9 +2727,10 @@ class AHPFrontend(QMainWindow):
             # Добавление информации о согласованности для матриц сравнения
             if is_comparison_matrix and values_array.ndim > 1 and values_array.shape[0] > 2:
                 consistency = self.backend.check_consistency(values_array)
+                # Округление показателей согласованности до 4 знаков
                 status_text = (
-                    f"Согласованность: λmax = {consistency['lambda_max']:.3f}, "
-                    f"ИС = {consistency['CI']:.3f}, ОС = {consistency['CR']:.3f} - "
+                    f"Согласованность: λmax = {round(consistency['lambda_max'], 4)}, "
+                    f"ИС = {round(consistency['CI'], 4)}, ОС = {round(consistency['CR'], 4)} - "
                     f"{consistency['status']}"
                 )
                 status_label = QLabel(status_text)
@@ -2770,13 +2780,13 @@ class AHPFrontend(QMainWindow):
         items = [
             QTableWidgetItem(str(row_num + 1)),
             QTableWidgetItem(str(label)),
-            QTableWidgetItem(f"{CB_value:.6f}"),
-            QTableWidgetItem(f"{w_value * 100:.2f}%" if show_percent else f"{w_value:.6f}")
+            QTableWidgetItem(f"{CB_value:.4f}"),
+            QTableWidgetItem(f"{w_value * 100:.2f}%" if show_percent else f"{w_value:.2f}")
         ]
 
         if is_second_level and second_level_w is not None:
             items.append(QTableWidgetItem(
-                f"{second_level_w[row_num] * 100:.2f}%" if show_percent else f"{second_level_w[row_num]:.6f}"
+                f"{second_level_w[row_num] * 100:.2f}%" if show_percent else f"{second_level_w[row_num]:.2f}"
             ))
 
         # Настройка стилей и выравнивания
@@ -2821,15 +2831,16 @@ class AHPFrontend(QMainWindow):
     def _create_bar_chart(self, labels, values, title, show_percent=False):
         """Создание столбчатой диаграммы"""
         try:
-            fig, ax = plt.subplots(figsize=(10, 4))
+            fig = plt.figure(figsize=(12, 6))
+            ax = fig.add_subplot(111)
 
-            if show_percent:
-                total = np.sum(values)
-                if total > 0:
-                    values = [v / total * 100 for v in values]
+            if self.display_percent:
+                values = [v * 100 for v in values]
                 ylabel = "Приоритет, %"
+                fmt = lambda v: f"{v:.2f}%"  # 2 знака для процентов
             else:
                 ylabel = "Значение приоритета"
+                fmt = lambda v: f"{v:.4f}"  # 4 знака для абсолютных значений"
 
             bars = ax.bar(labels, values)
             ax.set_title(title)
@@ -2841,7 +2852,7 @@ class AHPFrontend(QMainWindow):
                 ax.text(
                     bar.get_x() + bar.get_width() / 2.,
                     height,
-                    f'{height:.1f}%' if show_percent else f'{height:.3f}',
+                    f'{height:.2f}%' if show_percent else f'{height:.4f}',  # Проценты (2 знака), значения (4 знака)
                     ha='center', va='bottom'
                 )
 
