@@ -198,7 +198,7 @@ class AHPBackend:
                     CB_alt, w_alt = self.calculate_priority_vector(alt_matrix)
 
                     # Нормализуем веса альтернатив для каждого критерия
-                    w_alt_normalized = w_alt / np.sum(w_alt)
+                    w_alt_normalized = w_alt / np.sum(w_alt) if np.sum(w_alt) != 0 else w_alt
 
                     # Умножаем на вес критерия (матричное умножение)
                     alternatives_priority += w_alt_normalized * criteria_priority[self.criteria.index(criterion)]
